@@ -1,0 +1,24 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Projects folder: projects/{projectId}/documents/{fileName}
+    match /projects/{projectId}/documents/{allPaths=**} {
+      allow read: if isAuthenticated();
+      // Allow uploading PDF, DOCX, TXT, CSV, JSON under 10MB
+      allow write: if isAuthenticated()
+        && request.resource.size < 10 * 1024 * 1024
+        && (
+          request.resource.contentType.matches('application/pdf') ||
+          request.resource.contentType.matches('.*wordprocessingml.*') ||
+          request.resource.contentType.matches('text/.*') ||
+          request.resource.contentType.matches('application/json')
+        );
+      allow delete: if isAuthenticated();
+    }
+  }
+}

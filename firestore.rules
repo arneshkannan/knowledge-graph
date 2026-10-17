@@ -1,0 +1,100 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isManager() {
+      return isAuthenticated() && (
+        getUserData().role == 'manager' ||
+        request.auth.token.role == 'manager' ||
+        request.auth.token.email.matches('.*manager.*')
+      );
+    }
+
+    function isDepartmentUser(departmentId) {
+      return isAuthenticated() && (
+        isManager() ||
+        getUserData().departmentId == departmentId
+      );
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager() || request.auth.uid == userId;
+    }
+
+    // Departments Collection
+    match /departments/{departmentId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager();
+    }
+
+    // Projects Collection
+    match /projects/{projectId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager() || (
+        isAuthenticated() && isDepartmentUser(resource.data.departmentId)
+      );
+    }
+
+    // Tasks Collection
+    match /tasks/{taskId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isManager();
+    }
+
+    // Milestones Collection
+    match /milestones/{milestoneId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager() || isAuthenticated();
+    }
+
+    // Documents Metadata Collection
+    match /documents/{documentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isManager();
+    }
+
+    // Knowledge Nodes (Graph data)
+    match /knowledgeNodes/{nodeId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Knowledge Relationships (Graph edges)
+    match /knowledgeRelationships/{relId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // AI Analysis results
+    match /aiAnalyses/{analysisId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Project Status History & Audit Trail
+    match /projectStatusHistory/{historyId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Append-only audit integrity
+    }
+
+    match /auditLogs/{auditId} {
+      allow read: if isManager();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Immutable audit log
+    }
+  }
+}
